@@ -1,0 +1,42 @@
+20.01.2012
+   v 0.9.2
+      - copy/insert line
+      - filter in filechooser (pbtk)
+03.01.2012
+   v 0.9.1
+      - change pb_dialoghanler args
+      - some bug fixes
+      - new goto line dialog
+20.12.2011
+   v 0.9
+      - Search dialog
+11.12.2011
+   v 0.8
+      - add Recent Files
+      - add convertion from some encodings
+      - some fixes in filechooser
+04.12.2011
+   v 0.7
+      - fix filechooser for open and save
+      - save config
+02.12.2011
+      - select items on undo
+      - dynamic menu
+30.11.2011
+    v 0.5
+      - split pbcontrol to pbtk
+      - orientation
+      - select font
+      - add command line options (for bogomil)
+      - undo
+27.11.2011
+    v 0.2
+      - open file in filechooser by long OK
+      - optional show line numbers
+      - go to line number
+      - full path in filesave dialog
+      - monospace font by default
+      - emty string have full hight
+      - fix menu position
+25.11.2011 
+    v 0.0.1 - add NEW to menu and Begining message

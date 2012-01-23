@@ -1,0 +1,10 @@
+ Pocketbook edItor v 0.9.2
+ to call menu press long OK or long click
+ last versions you can find at http://fedorchenko.net/pi.php
+ 
+ Command line options:
+ -l n  - go to line n after file open
+ -f name - open file name (if not set treat last argument as file name)
+ -s select mode (for bogomil) write filename and selected line number to stderr at exit 
+ (also exit at edit)
+
