@@ -17,7 +17,7 @@
 #ifndef ___PI_H___
 #define ___PI_H___
 #undef IVSAPP
-#include "inkview.h"
+//#include "inkview.h"
 
 #include <iostream>
 #include <functional>

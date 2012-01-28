@@ -14,6 +14,7 @@ LDFLAGS+= -L../pbtk/obj_$(BUILD)
 LIBS+=-lpbtk
 
 ifeq (${BUILD},emu)
+CXXFLAGS+=`pkg-config --cflags sigc++-2.0` -I./../
 LIBS+=-lsigc-2.0
 else 
 ifeq (${BUILD},arm)
