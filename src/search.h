@@ -14,6 +14,9 @@
 * along with this library; if not, write to the Free Software
 * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
 */
+#ifndef _PI_SEARCH_H_
+#define _PI_SEARCH_H_
+
 #include "pi.h"
 #include "pbtk/pbinput.h"
 #include "pbtk/pbdialog.h"
@@ -42,4 +45,4 @@ class SearchDialog : public PBDialog {
   void placeWidgets();
   void searchFrom(int f){start_pos=f;}
 };
-
+#endif

@@ -1,4 +1,4 @@
-/* Copyright (C) 2011 Yury P. Fedorchenko (yuryfdr at users.sf.net)  */
+/* Copyright (C) 2011-2012 Yury P. Fedorchenko (yuryfdr at users.sf.net)  */
 /*
 * This library is free software; you can redistribute it and/or modify
 * it under the terms of the GNU Lesser General Public License as published by
@@ -19,8 +19,8 @@
 #include "pbtk/convert.h"
 #include "pi.h"
 #include "search.h"
-#include "pbtk/selector.h"
-#include "math.h"
+#include "pref.h"
+#include <math.h>
 
 PBTextDisplay::PBTextDisplay(const std::string & str, PBWidget * par):PBListBox(str, par),
 changed(false), sh_ln(false)
@@ -71,31 +71,64 @@ void PBTextDisplay::editItem(bool ins)
   OpenKeyboard("Edit", buff, buff_size, 0 | KBDOPTS, keyboard_entry);
 }
 
-void PBTextDisplay::undoOp()
-{
-  if (undo.empty()) {
-    Message(ICON_ERROR, "Undo", "Nothing to undo", 60000);
+void PBTextDisplay::undoOp(){
+  if(undo.empty()){
+    Message(ICON_ERROR,"Undo","Nothing to undo",60000);
     return;
   }
+  int repeat;
   undoop p = *(undo.rbegin());
-  switch (p.op) {
-  case undoop::EDIT:
-    _items[p.pos]->setText(p.str);
-    item = _items[p.pos];
+  switch(p.op){
+    case undoop::EDIT:
+      _items[p.pos]->setText(p.str);
+      item=_items[p.pos];
     break;
-  case undoop::INSERT:
-    item = erase(_items[p.pos]);
+    case undoop::INSERT:
+      item=erase(_items[p.pos]);
     break;
-  case undoop::DELETE:
-    item = insertBefore(_items[p.pos], p.str);
+    case undoop::DELETE:
+      item=insertBefore(_items[p.pos],p.str);
     break;
+    case undoop::INSERT_SUBTREE:
+      repeat=p.repeat;
+      for(int i=0;i<repeat;i++){
+        undo.resize(undo.size()-1);
+        p = *(undo.rbegin());
+
+        item=erase(_items[p.pos]);
+      }
+    break;
+    case undoop::EDIT_SUBTREE:
+      repeat=p.repeat;
+      for(int i=0;i<repeat;i++){
+        undo.resize(undo.size()-1);
+        p = *(undo.rbegin());
+
+        item=_items[p.pos];
+        item->setText(p.str);
+      }
+    break;
+    case undoop::DELETE_SUBTREE:
+      repeat=p.repeat;
+      for(int i=0;i<repeat;i++){
+        undo.resize(undo.size()-1);
+        p = *(undo.rbegin());
+
+        item=insertBefore(_items[p.pos],p.str);
+      }
+    break;
+    case undoop::MOVE_SUBTREE:
+      undo.resize(undo.size()-1);
+      undoOp();
+      undoOp();
+      break;
   }
   selectItem(item);
-  undo.resize(undo.size() - 1);
-  if (undo.empty() && changed)
-    changed = false;
-  else
-    changed = true;
+  if(p.op!=undoop::MOVE_SUBTREE)
+    undo.resize(undo.size()-1);
+
+  if(undo.empty() && changed)changed=false;
+  else changed=true;
   updateNumbers();
   update();
 }
@@ -187,9 +220,17 @@ imenu fileMenu[] = {
 imenu optMenu[] = {
   {ITEM_ACTIVE, ITM_SHNO, "Show line #", NULL},
   {ITEM_SEPARATOR, 0, NULL, NULL},
+  {ITEM_ACTIVE, ITM_OPLF, "Open Last File On Run", NULL},
+  {ITEM_SEPARATOR, 0, NULL, NULL},
   {ITEM_ACTIVE, ITM_FONT, "Select Font", NULL},
   {ITEM_SEPARATOR, 0, NULL, NULL},
   {ITEM_ACTIVE, ITM_ORIE, "Orientation", NULL},
+  {ITEM_SEPARATOR, 0, NULL, NULL},
+  {ITEM_ACTIVE, ITM_OUT_ENABLE, "Enable Outline Mode", NULL},//outline options
+  {ITEM_ACTIVE, ITM_INDENT2, "Indent 2", NULL},//outline options
+  {ITEM_ACTIVE, ITM_INDENT4, "Indent 4", NULL},
+  {ITEM_SEPARATOR, 0, NULL, NULL},
+  {ITEM_ACTIVE, ITM_KEYS, "Key Bindings", NULL},
   {0, 0, NULL, NULL}
 };
 
@@ -200,16 +241,22 @@ imenu searchMenu[] = {
 //  { ITEM_ACTIVE, ITM_REPL, "Replace", NULL },
   {0, 0, NULL, NULL}
 };
-
-imenu mainMenu[] = {
-  {ITEM_HEADER, 0, "π", NULL},
-  {ITEM_ACTIVE, ITM_EDIT, "Edit", NULL},
+imenu editMenu[] = {
   {ITEM_ACTIVE, ITM_COPY, "Copy Line", NULL},
   {ITEM_ACTIVE, ITM_INSB, "Insert Before", NULL},
   {ITEM_ACTIVE, ITM_INSA, "Insert After", NULL},
+  {ITEM_ACTIVE, ITM_IMPORT, "Insert File After", NULL},
   {ITEM_ACTIVE, ITM_DELE, "Delete", NULL},
+  {0, 0, NULL, NULL}
+};
+extern imenu outlineMenu[];
+imenu mainMenu[] = {
+  {ITEM_HEADER, 0, "π", NULL},
+  {ITEM_ACTIVE, ITM_EDIT, "Edit Line", NULL},
   {ITEM_ACTIVE, ITM_NEWF, "New Line", NULL},
+  {ITEM_SUBMENU, 0, "Edit", editMenu},
   {ITEM_SEPARATOR, 0, NULL, NULL},
+  {ITEM_SUBMENU, 0, "Edit Outline", outlineMenu },
   {ITEM_ACTIVE, ITM_UNDO, "Undo", NULL},
   {ITEM_SEPARATOR, 0, NULL, NULL},
   {ITEM_SUBMENU, 0, "File", fileMenu},
@@ -219,401 +266,429 @@ imenu mainMenu[] = {
   {ITEM_SUBMENU, 0, "Options", optMenu},
   {0, 0, NULL, NULL}
 };
+void MainScreen::updateMenu()
+{
+  if (text.item) {
+    mainMenu[1].type = ITEM_ACTIVE;
+    mainMenu[2].type = ITEM_HIDDEN;
+    mainMenu[3].type = ITEM_SUBMENU;
+    mainMenu[4].type = ITEM_SEPARATOR;
+    mainMenu[5].type = enable_outline ? ITEM_SUBMENU : ITEM_HIDDEN;
+//    mainMenu[6].type = ITEM_ACTIVE;
+  } else {
+    mainMenu[1].type = ITEM_HIDDEN;
+    mainMenu[2].type = ITEM_ACTIVE;
+    mainMenu[3].type = ITEM_HIDDEN;
+    mainMenu[4].type = ITEM_HIDDEN;
+    mainMenu[5].type = ITEM_HIDDEN;
+//    mainMenu[6].type = ITEM_HIDDEN;
+  }
+  if(indentation==2){
+    optMenu[9].type=ITEM_BULLET;  
+    optMenu[10].type=ITEM_ACTIVE;  
+  }else{
+    optMenu[9].type=ITEM_ACTIVE;  
+    optMenu[10].type=ITEM_BULLET;  
+  }
+  optMenu[2].type = (open_last) ? ITEM_BULLET : ITEM_ACTIVE;
+  optMenu[8].type = (enable_outline) ? ITEM_BULLET : ITEM_ACTIVE;
+  mainMenu[6].type = (text.undo.empty())?ITEM_HIDDEN:ITEM_ACTIVE;
+}
 
-void SaveCFG();
-class MainScreen:public PBWidget {
- public:
-  PBTextDisplay text;
- private:
-  std::string fileName;
+void MainScreen::exit_dlg_h(int bt)
+{
+  if (bt == 1) {
+    SaveCFG();
+    CloseApp();
+  }
+}
 
- public:
-  bool select_mode;
+void MainScreen::fsimport_hndl(int isok, PBFileChooser * dlg)
+{
+  if (isok) {
+    std::string s = dlg->getPath();
+    ms->openFile(s.c_str(),true);
+    ms->text.updateNumbers();
+  }
+}
+void MainScreen::fopen_hndl(int isok, PBFileChooser * dlg)
+{
+  if (isok) {
+    std::string s = dlg->getPath();
+    if (ms->openFile(s.c_str()))
+      addRecent(s.c_str());
+    ms->text.updateNumbers();
+  }
+}
 
-  static void exit_dlg_h(int bt) {
-    if (bt == 1) {
-      SaveCFG();
-      CloseApp();
+void MainScreen::addRecent(const char *s)
+{
+  for (int i = 0; i < 9; ++i) {
+    if (rsntFile[i].text && strcmp(rsntFile[i].text, s) == 0) {
+      if (i != 0)
+        std::swap(rsntFile[i].text, rsntFile[0].text);
+      return;
     }
   }
-  static void fopen_hndl(int isok, PBFileChooser * dlg) {
-    if (isok) {
-      std::string s = dlg->getPath();
-      if (ms->openFile(s.c_str()))
-        addRecent(s.c_str());
-      ms->text.updateNumbers();
+  if (rsntFile[9].text)
+    free(rsntFile[9].text);
+  for (int i = 8; i >= 0; --i) {
+    if (rsntFile[i].text) {
+      rsntFile[i + 1].text = rsntFile[i].text;
+      rsntFile[i + 1].type = ITEM_ACTIVE;
     }
   }
-/*  void fopen_hndl(PBFileChooser*fc,bool s){
-    if(s){
-      if(openFile(fc->getPath().c_str()))addRecent(fc->getPath().c_str());
-      text.updateNumbers();
-    }
-  }*/
-  static void addRecent(const char *s) {
-    for (int i = 0; i < 9; ++i) {
-      if (rsntFile[i].text && strcmp(rsntFile[i].text, s) == 0) {
-        if (i != 0)
-          std::swap(rsntFile[i].text, rsntFile[0].text);
-        return;
-      }
-    }
-    if (rsntFile[9].text)
-      free(rsntFile[9].text);
-    for (int i = 8; i >= 0; --i) {
-      if (rsntFile[i].text) {
-        rsntFile[i + 1].text = rsntFile[i].text;
-        rsntFile[i + 1].type = ITEM_ACTIVE;
-      }
-    }
-    rsntFile[0].text = strdup(s);
-    rsntFile[0].type = ITEM_ACTIVE;
-    fileMenu[4].type = ITEM_SUBMENU;
-  }
-  static void fsave_hndl(int isok, PBFileChooser * dlg) {
-    if (isok) {
-      std::string s = dlg->getPath();
-      if (ms->saveFile(s.c_str())) {
-        addRecent(s.c_str());
-        ms->text.changed = false;
-      }
+  rsntFile[0].text = strdup(s);
+  rsntFile[0].type = ITEM_ACTIVE;
+  fileMenu[4].type = ITEM_SUBMENU;
+}
+
+void MainScreen::fsave_hndl(int isok, PBFileChooser * dlg)
+{
+  if (isok) {
+    std::string s = dlg->getPath();
+    if (ms->saveFile(s.c_str())) {
+      addRecent(s.c_str());
+      ms->text.changed = false;
     }
   }
-  static void goto_hndl(char *s) {
-    if (s) {
-      int ln = atoi(s);
-      if (ln < 0)
-        return;
-      ms->text.selectItem(ln - 1);
-      ms->update();
-    }
-  }
-  static void goto_n_hndl(int s) {
-    if (s > 0) {
-      ms->text.selectItem(s - 1);
-      ms->update();
-    }
-  }
-  static PBNumericSelector *ns;
-  void goto_ln_hndl(PBNumericSelector * ns, bool ok) {
-    if (ok) {
-      int ln = ns->selected();
-      if (ln == 0)
-        ms->text.selectItem(0);
-      else if (ln == -1)
-        ms->text.selectItem(ms->text.itemsCount() - 1);
-      ms->text.selectItem(ln - 1);
-      ms->update();
-    }
-  }
-  static void orie_hndl(int s) {
-    SetOrientation(s);
+}
+
+void MainScreen::goto_ln_hndl(PBNumericSelector * ns, bool ok)
+{
+  if (ok) {
+    int ln = ns->selected();
+    if (ln == 0)
+      ms->text.selectItem(0);
+    else if (ln == -1)
+      ms->text.selectItem(ms->text.itemsCount() - 1);
+    ms->text.selectItem(ln - 1);
     ms->update();
   }
-  static void fsh(char *r, char *b, char *i, char *t) {
-    //printf("%s %s %s %s\n",r,b,i,t);
-    std::string dfs(r);
-    int dfss = atoi(dfs.substr(dfs.find_first_of(",") + 1).c_str());
-    ifont *df = OpenFont(dfs.substr(0, dfs.find_first_of(",")).c_str(), dfss, 1);
-    if (df) {
-      ms->text.setWidgetFont(df);
-      ms->text.update();
-    }
+}
+
+void MainScreen::fsh(char *r, char *b, char *i, char *t)
+{
+  std::string dfs(r);
+  int dfss = atoi(dfs.substr(dfs.find_first_of(",") + 1).c_str());
+  ifont *df = OpenFont(dfs.substr(0, dfs.find_first_of(",")).c_str(), dfss, 1);
+  if (df) {
+    ms->text.setWidgetFont(df);
+    ms->text.update();
   }
-  SearchDialog *sd;
-  static void HandleMainMenuItem(int index) {
-    static char buff[1024];
-    switch (index) {
-    case ITM_FIND:
-      if (!ms->sd) {
-        ms->sd = new SearchDialog("Find", &ms->text, ms->text.getSelectedIndex());
-      } else {
-        ms->sd->searchFrom(ms->text.getSelectedIndex());
+}
+
+void MainScreen::HandleMainMenuItem(int index)
+{
+  static char buff[1024];
+  if(ITM_TOCF<=index){
+    ms->outlineMenuHandler(index);
+    return;
+  }
+  switch (index) {
+  case ITM_FIND:
+    if (!ms->sd) {
+      ms->sd = new SearchDialog("Find", &ms->text, ms->text.getSelectedIndex());
+    } else {
+      ms->sd->searchFrom(ms->text.getSelectedIndex());
+    }
+    ms->sd->run();
+    break;
+  case ITM_1251T:
+    ms->text.decode("cp1251");
+    break;
+  case ITM_866T:
+    ms->text.decode("cp866");
+    break;
+  case ITM_KOI8T:
+    ms->text.decode("koi8r");
+    break;
+  case ITM_1251:
+    ms->text.convert("cp1251");
+    break;
+  case ITM_866:
+    ms->text.convert("cp866");
+    break;
+  case ITM_KOI8:
+    ms->text.convert("koi8r");
+    break;
+  case ITM_RSNT0:
+  case ITM_RSNT1:
+  case ITM_RSNT2:
+  case ITM_RSNT3:
+  case ITM_RSNT4:
+  case ITM_RSNT5:
+  case ITM_RSNT6:
+  case ITM_RSNT7:
+  case ITM_RSNT8:
+  case ITM_RSNT9:
+    if (rsntFile[index - ITM_RSNT0].text) {
+      //ms->fopen_hndl(0,rsntFile[index-ITM_RSNT0].text);
+      if (ms->openFile(rsntFile[index - ITM_RSNT0].text)) {
+        ms->addRecent(rsntFile[index - ITM_RSNT0].text);
+        ms->text.updateNumbers();
       }
-      ms->sd->run();
-      break;
-    case ITM_1251T:
-      ms->text.decode("cp1251");
-      break;
-    case ITM_866T:
-      ms->text.decode("cp866");
-      break;
-    case ITM_KOI8T:
-      ms->text.decode("koi8r");
-      break;
-    case ITM_1251:
-      ms->text.convert("cp1251");
-      break;
-    case ITM_866:
-      ms->text.convert("cp866");
-      break;
-    case ITM_KOI8:
-      ms->text.convert("koi8r");
-      break;
-    case ITM_RSNT0:
-    case ITM_RSNT1:
-    case ITM_RSNT2:
-    case ITM_RSNT3:
-    case ITM_RSNT4:
-    case ITM_RSNT5:
-    case ITM_RSNT6:
-    case ITM_RSNT7:
-    case ITM_RSNT8:
-    case ITM_RSNT9:
-      if (rsntFile[index - ITM_RSNT0].text) {
-        //ms->fopen_hndl(0,rsntFile[index-ITM_RSNT0].text);
-        if (ms->openFile(rsntFile[index - ITM_RSNT0].text)) {
-          ms->addRecent(rsntFile[index - ITM_RSNT0].text);
-          ms->text.updateNumbers();
-        }
+      ms->update();
+    }
+    break;
+  case ITM_FONT:{
+      std::stringstream str;
+      str << ms->text.getFont()->name;
+      if (str.str().find(".ttf") == std::string::npos)
+        str << ".ttf";
+      str << "," << ms->text.getFont()->size;
+      //std::cerr<<str.str()<<std::endl;
+      OpenFontSelector("Select", str.str().c_str(), 1, fsh);
+    }
+    break;
+  case ITM_ORIE:
+    OpenRotateBox(orie_hndl);
+    break;
+  case ITM_UNDO:
+    ms->text.undoOp();
+    break;
+  case ITM_EDIT:
+    if (ms->select_mode) {
+      std::cerr << ms->fileName << "," << ms->text.getSelectedIndex() + 1 << std::endl;
+      exit(0);
+    } else {
+      ms->text.editItem();
+    }
+    break;
+  case ITM_COPY:
+    if (PBTextDisplay::item) {
+      ms->text.copy_buf = PBTextDisplay::item->getText();
+      ms->update();
+    }
+    break;
+  case ITM_DELE:
+    if (PBTextDisplay::item) {
+      ms->text.curop.op = undoop::DELETE;
+      ms->text.curop.str = PBTextDisplay::item->getText();
+      ms->text.curop.pos = ms->text.getPos(PBTextDisplay::item);
+      ms->text.undo.push_back(ms->text.curop);
+      //
+      PBTextDisplay::item = ms->text.erase(PBTextDisplay::item);
+      ms->text.changed = true;
+      ms->text.updateNumbers();
+      ms->update();
+    }
+    break;
+  case ITM_INSB:
+    if (PBTextDisplay::item) {
+      PBListBoxItem *itm = ms->text.insertBefore(PBTextDisplay::item, "");
+      ms->text.updateNumbers();
+      if (itm) {
         ms->update();
+        ms->text.curop.op = undoop::INSERT;
+        ms->text.curop.str = itm->getText();
+        ms->text.curop.pos = ms->text.getPos(itm);
+        ms->text.undo.push_back(ms->text.curop);
+        PBTextDisplay::item = itm;
+        ms->text.editItem(true);
       }
-      break;
-    case ITM_FONT:{
-        std::stringstream str;
-        str << ms->text.getFont()->name;
-        if (str.str().find(".ttf") == std::string::npos)
-          str << ".ttf";
-        str << "," << ms->text.getFont()->size;
-        //std::cerr<<str.str()<<std::endl;
-        OpenFontSelector("Select", str.str().c_str(), 1, fsh);
+    }
+    break;
+  case ITM_INSA:
+    if (PBTextDisplay::item) {
+      PBListBoxItem *itm = ms->text.insertAfter(PBTextDisplay::item, "");
+      ms->text.updateNumbers();
+      if (itm) {
+        ms->update();
+        ms->text.curop.op = undoop::INSERT;
+        ms->text.curop.str = itm->getText();
+        ms->text.curop.pos = ms->text.getPos(itm);
+        ms->text.undo.push_back(ms->text.curop);
+        PBTextDisplay::item = itm;
+        ms->text.editItem(true);
       }
-      break;
-    case ITM_ORIE:
-      OpenRotateBox(orie_hndl);
-      break;
-    case ITM_UNDO:
-      ms->text.undoOp();
-      break;
-    case ITM_EDIT:
-      if (ms->select_mode) {
-        std::cerr << ms->fileName << "," << ms->text.getSelectedIndex() + 1 << std::endl;
-        exit(0);
-      } else {
+    }
+    break;
+  case ITM_NEWF:
+    {
+      ms->text.clear();
+      ms->text.undo.clear();
+      PBListBoxItem *itm = ms->text.addItem("");
+      ms->text.updateNumbers();
+      if (itm) {
+        ms->update();
+        PBTextDisplay::item = itm;
         ms->text.editItem();
       }
-      break;
-    case ITM_COPY:
-      if (PBTextDisplay::item) {
-        ms->text.copy_buf = PBTextDisplay::item->getText();
-        ms->update();
-      }
-      break;
-    case ITM_DELE:
-      if (PBTextDisplay::item) {
-        ms->text.curop.op = undoop::DELETE;
-        ms->text.curop.str = PBTextDisplay::item->getText();
-        ms->text.curop.pos = ms->text.getPos(PBTextDisplay::item);
-        ms->text.undo.push_back(ms->text.curop);
-        //
-        PBTextDisplay::item = ms->text.erase(PBTextDisplay::item);
-        ms->text.changed = true;
-        ms->text.updateNumbers();
-        ms->update();
-      }
-      break;
-    case ITM_INSB:
-      if (PBTextDisplay::item) {
-        PBListBoxItem *itm = ms->text.insertBefore(PBTextDisplay::item, "");
-        ms->text.updateNumbers();
-        if (itm) {
-          ms->update();
-          ms->text.curop.op = undoop::INSERT;
-          ms->text.curop.str = itm->getText();
-          ms->text.curop.pos = ms->text.getPos(itm);
-          ms->text.undo.push_back(ms->text.curop);
-          PBTextDisplay::item = itm;
-          ms->text.editItem(true);
-        }
-      }
-      break;
-    case ITM_INSA:
-      if (PBTextDisplay::item) {
-        PBListBoxItem *itm = ms->text.insertAfter(PBTextDisplay::item, "");
-        ms->text.updateNumbers();
-        if (itm) {
-          ms->update();
-          ms->text.curop.op = undoop::INSERT;
-          ms->text.curop.str = itm->getText();
-          ms->text.curop.pos = ms->text.getPos(itm);
-          ms->text.undo.push_back(ms->text.curop);
-          PBTextDisplay::item = itm;
-          ms->text.editItem(true);
-        }
-      }
-      break;
-    case ITM_NEWF:
-      {
-        ms->text.clear();
-        ms->text.undo.clear();
-        PBListBoxItem *itm = ms->text.addItem("");
-        ms->text.updateNumbers();
-        if (itm) {
-          ms->update();
-          PBTextDisplay::item = itm;
-          ms->text.editItem();
-        }
-      }
-      break;
-    case ITM_EXIT:
-      if (ms->text.changed) {
-        Dialog(ICON_QUESTION, "Quit?", "File changed! Quit?", "Yes", "NO", MainScreen::exit_dlg_h);
-      } else {
-        std::cerr << ms->fileName << "," << ms->text.getSelectedIndex() + 1 << std::endl;
-        SaveCFG();
-        exit(0);
-      }
-      break;
-    case ITM_OPEN:{
-        if (ms->fileName.empty())
-          getcwd(buff, 1023);
-        else
-          strcpy(buff, ms->fileName.c_str());
-        OpenFileChooser("Open", buff, "*.txt\n*.cfg\n*", 0, (pb_dialoghandler) fopen_hndl);
-        break;
-      }
-    case ITM_SAVE:{
-        if (ms->fileName.empty())
-          getcwd(buff, 1023);
-        else
-          strcpy(buff, ms->fileName.c_str());
-        OpenFileChooser("Save", buff, "*", 1, (pb_dialoghandler) fsave_hndl);
-        //OpenKeyboard("Save",buff,1024,1,fsave_hndl);
-        break;
-      }
-    case ITM_ABOUT:
-      Message(ICON_INFORMATION, "π", "π(pi) - Pocketbook edItor v 0.9.3\n"
-              "Yury P. Fedorchenko © 2011-2012\n"
-              "OK or click - edit line\n" "long OK or long click - menu", 50000);
-      break;
-    case ITM_GOTO:
-      //OpenKeyboard("Go to Line",buff,1024,KBD_NUMERIC | KBDOPTS,goto_hndl);
-      //OpenPageSelector(goto_n_hndl);
-      if (!ns) {
-        ns = new PBNumericSelector("Go to Line:");
-        ns->onSelect.connect(sigc::mem_fun(ms, &MainScreen::goto_ln_hndl));
-      }
-      //ns->selected(ms->text.getSelectedIndex()+1);
-      ns->reset();
-      ns->run();
-      break;
-    case ITM_SHNO:
-      ms->showNumbers(!ms->text.sh_ln);
+    }
+    break;
+  case ITM_EXIT:
+    if (ms->text.changed) {
+      Dialog(ICON_QUESTION, "Quit?", "File changed! Quit?", "Yes", "NO", MainScreen::exit_dlg_h);
+    } else {
+      std::cerr << ms->fileName << "," << ms->text.getSelectedIndex() + 1 << std::endl;
+      SaveCFG();
+      exit(0);
+    }
+    break;
+  case ITM_OPEN:{
+      if (ms->fileName.empty())
+        getcwd(buff, 1023);
+      else
+        strcpy(buff, ms->fileName.c_str());
+      OpenFileChooser("Open", buff, "*.txt\n*.cfg\n*", 0, (pb_dialoghandler) fopen_hndl);
       break;
     }
-  }
-  void showNumbers(bool s) {
-    ms->text.sh_ln = s;
-    optMenu[0].type = (s) ? ITEM_BULLET : ITEM_ACTIVE;
-    ms->text.updateNumbers();
-    ms->update();
-  }
- MainScreen(const char *nm = NULL, int no = 0, bool selectmode = false):PBWidget("", NULL),
-      text("ta", this), sd(NULL)
-  {
-    addWidget(&text);
-    placeWidgets();
-    select_mode = selectmode;
-    ms = this;
-    if (nm) {
-      openFile(nm);
-      if (no > 0) {
-        showNumbers(true);
-        text.selectItem(no - 1);
-        update();
-      }
-    } else
-      text.addItem("Long OK or Long tap for menu");
-  }
-  int openFile(const char *nm) {
-    std::ifstream in(nm);
-    if (in.fail()) {
-      char errstr[256];
-      sprintf(errstr, "Can't open file:%s", nm);
-      Message(ICON_ERROR, "Error", errstr, 50000);
-      return 0;
+  case ITM_IMPORT:{
+      if (ms->fileName.empty())
+        getcwd(buff, 1023);
+      else
+        strcpy(buff, ms->fileName.c_str());
+      OpenFileChooser("Import", buff, "*.txt\n*.cfg\n*", 0, (pb_dialoghandler) fsimport_hndl);
+      break;
     }
-    fileName = nm;
-    text.clear();
-    while (!in.fail() && !in.eof()) {
-      std::string line;
-      std::getline(in, line);
+  case ITM_SAVE:{
+      if (ms->fileName.empty())
+        getcwd(buff, 1023);
+      else
+        strcpy(buff, ms->fileName.c_str());
+      OpenFileChooser("Save", buff, "*", 1, (pb_dialoghandler) fsave_hndl);
+      //OpenKeyboard("Save",buff,1024,1,fsave_hndl);
+      break;
+    }
+  case ITM_ABOUT:
+    Message(ICON_INFORMATION, "π", "π(pi) - Pocketbook edItor v 0.9.99\n"
+            "Yury P. Fedorchenko © 2011-2012\n"
+            "OK or click - edit line\n" "long OK or long click - menu", 50000);
+    break;
+  case ITM_GOTO:
+    //OpenKeyboard("Go to Line",buff,1024,KBD_NUMERIC | KBDOPTS,goto_hndl);
+    //OpenPageSelector(goto_n_hndl);
+    if (!ns) {
+      ns = new PBNumericSelector("Go to Line:");
+      ns->onSelect.connect(sigc::mem_fun(ms, &MainScreen::goto_ln_hndl));
+    }
+    //ns->selected(ms->text.getSelectedIndex()+1);
+    ns->reset();
+    ns->run();
+    break;
+  case ITM_SHNO:
+    ms->showNumbers(!ms->text.sh_ln);
+    break;
+  case ITM_OUT_ENABLE:
+    ms->enableOutline(!ms->enable_outline);
+    break;
+  case ITM_OPLF:
+    ms->openLast(!ms->open_last);
+    break;
+  case ITM_KEYS:
+    ms->pipref->run();
+    break;
+  }
+}
+
+void MainScreen::openLast(bool s)
+{
+  ms->open_last = s;
+  optMenu[2].type = (s) ? ITEM_BULLET : ITEM_ACTIVE;
+}
+void MainScreen::enableOutline(bool s)
+{
+  ms->enable_outline = s;
+  optMenu[8].type = (s) ? ITEM_BULLET : ITEM_ACTIVE;
+  mainMenu[4].type = (s) ? ITEM_SUBMENU : ITEM_HIDDEN;
+}
+
+void MainScreen::showNumbers(bool s)
+{
+  ms->text.sh_ln = s;
+  optMenu[0].type = (s) ? ITEM_BULLET : ITEM_ACTIVE;
+  ms->text.updateNumbers();
+  ms->update();
+}
+
+MainScreen::MainScreen(const char *nm, int no, bool selectmode):PBWidget("", NULL),
+text("ta", this), sd(NULL)
+{
+  addWidget(&text);
+  placeWidgets();
+  select_mode = selectmode;
+  ms = this;
+  if (nm) {
+    openFile(nm);
+    if (no > 0) {
+      showNumbers(true);
+      text.selectItem(no - 1);
+      update();
+    }
+  } else
+    text.addItem("Long OK or Long tap for menu");
+}
+
+int MainScreen::openFile(const char *nm,bool insert)
+{
+  std::ifstream in(nm);
+  if (in.fail()) {
+    char errstr[256];
+    sprintf(errstr, "Can't open file:%s", nm);
+    Message(ICON_ERROR, "Error", errstr, 50000);
+    return 0;
+  }
+  fileName = nm;
+  if(!insert)text.clear();
+  while (!in.fail() && !in.eof()) {
+    std::string line;
+    std::getline(in, line);
+    if(insert){
+      PBListBoxItem *itm = text.insertAfter(text.getSelectedItem(),line);
+      itm->setCanBeFocused(true);
+      itm->setFocused(true);
+    }else{
       PBListBoxItem *itm = text.addItem(line);
       itm->setCanBeFocused(true);
     }
+  }
+  return 1;
+}
+
+int MainScreen::saveFile(const char *nm)
+{
+  std::ofstream out(nm);
+  if (!out.fail()) {
+    fsaver a(out);
+    text.forEachItem(a);
+  }
+  if (out.fail()) {
+    char errstr[256];
+    sprintf(errstr, "Can't save file:%s", nm);
+    Message(ICON_ERROR, "Error", errstr, 50000);
+    return 0;
+  } else
+    fileName = nm;
+  return 1;
+}
+
+void MainScreen::openMenu(int x,int y){
+  ms->updateMenu();
+  OpenMenu(mainMenu, 0, x, y, HandleMainMenuItem);
+}
+
+int MainScreen::handle(int type, int par1, int par2)
+{
+  if (EVT_SHOW == type) {
+    setFocused(true);
+    update();
     return 1;
   }
-  struct fsaver:public std::unary_function < void, PBListBoxItem * > {
-    std::ofstream & out;
-    fsaver(std::ofstream & _out):out(_out) {
-    };
-    void operator () (PBListBoxItem * itm) {
-      out << itm->getText() << std::endl;
-      //std::cerr<<itm->getText()<<std::endl;
-    };
-  };
-  int saveFile(const char *nm) {
-    std::ofstream out(nm);
-    if (!out.fail()) {
-      fsaver a(out);
-      text.forEachItem(a);
-    }
-    if (out.fail()) {
-      char errstr[256];
-      sprintf(errstr, "Can't save file:%s", nm);
-      Message(ICON_ERROR, "Error", errstr, 50000);
-      return 0;
-    } else
-      fileName = nm;
-    return 1;
-  }
-  void placeWidgets() {
-    setSize(0, 0, ScreenWidth(), ScreenHeight());
-    text.setSize(0, 0, ScreenWidth(), ScreenHeight());
-  }
-  int handle(int type, int par1, int par2) {
-    //printf("handle %d %d %d\n",type,par1,par2);
-    if (EVT_SHOW == type) {
-      setFocused(true);
-      update();
+  if (EVT_KEYREPEAT == type) {
+    if (KEY_OK == par1) {
+      openMenu(10, 10);
       return 1;
     }
-    if (EVT_KEYREPEAT == type) {
-      if (KEY_OK == par1) {
-        ms->updateMenu();
-        OpenMenu(mainMenu, 0, 10, 10, HandleMainMenuItem);
-        return 1;
-      }
-    }
-    if (EVT_POINTERLONG == type) {
-      ms->updateMenu();
-      OpenMenu(mainMenu, 0, par1, par2, HandleMainMenuItem);
-    }
-    return PBWidget::handle(type, par1, par2);
   }
-  void updateMenu() {
-    if (text.item) {
-      mainMenu[1].type = ITEM_ACTIVE;
-      mainMenu[2].type = ITEM_ACTIVE;
-      mainMenu[3].type = ITEM_ACTIVE;
-      mainMenu[4].type = ITEM_ACTIVE;
-      mainMenu[5].type = ITEM_ACTIVE;
-      mainMenu[6].type = ITEM_HIDDEN;
-    } else {
-      mainMenu[1].type = ITEM_HIDDEN;
-      mainMenu[2].type = ITEM_HIDDEN;
-      mainMenu[3].type = ITEM_HIDDEN;
-      mainMenu[4].type = ITEM_HIDDEN;
-      mainMenu[5].type = ITEM_HIDDEN;
-      mainMenu[6].type = ITEM_ACTIVE;
-    }
+  if (EVT_POINTERLONG == type) {
+    openMenu(par1, par2);
   }
-  static MainScreen *ms;
-  static void setChanged(bool is) {
-    MainScreen::ms->text.changed = is;
-    MainScreen::ms->text.updateNumbers();
+  if (EVT_KEYUP == type){
+    if(pipref->handleKeys(par1))return 1;
   }
-};
+  return PBWidget::handle(type, par1, par2);
+}
 
 MainScreen *MainScreen::ms = NULL;
 PBNumericSelector *MainScreen::ns = NULL;
@@ -648,6 +723,9 @@ void SaveCFG()
   WriteString(config, "Font", str.str().c_str());
   WriteInt(config, "Orient", GetOrientation());
   WriteInt(config, "LineNumbers", MainScreen::ms->text.sh_ln);
+  WriteInt(config, "OpenLast", MainScreen::ms->open_last);
+  WriteInt(config, "EnableOutline", MainScreen::ms->enable_outline);
+  WriteInt(config, "Indentation", MainScreen::ms->indentation);
   for (int i = 9; i >= 0; --i) {
     if (rsntFile[i].text) {
       std::stringstream str1;
@@ -655,6 +733,7 @@ void SaveCFG()
       WriteString(config, str1.str().c_str(), rsntFile[i].text);
     }
   }
+  MainScreen::ms->pipref->saveConfig(config);
   SaveConfig(config);
   CloseConfig(config);
 }
@@ -665,17 +744,26 @@ int main_handler(int type, int par1, int par2)
     config = OpenConfig(CONFIGPATH "/pi.cfg", NULL);
     if (config) {
       MainScreen::ms = new MainScreen(fname, lnno, select_mode);
+      MainScreen::ms->pipref = new PiPref();
       MainScreen::ms->fsh(ReadString(config, "Font", "LiberationMono, 22"), NULL, NULL, NULL);
       MainScreen::ms->orie_hndl(ReadInt(config, "Orient", 0));
       MainScreen::ms->showNumbers(ReadInt(config, "LineNumbers", 0));
+      MainScreen::ms->openLast(ReadInt(config, "OpenLast", 0));
+      MainScreen::ms->enableOutline(ReadInt(config, "EnableOutline", 0));
+      MainScreen::ms->indentation=ReadInt(config, "Indentation", 2);
       for (int i = 9; i >= 0; --i) {
         std::stringstream str;
         str << "RF" << i;
         char *s = ReadString(config, str.str().c_str(), NULL);
         if (s && *s) {
           MainScreen::ms->addRecent(s);
+          if(i==0 && MainScreen::ms->open_last && !fname){
+            MainScreen::ms->openFile(s);
+            MainScreen::ms->text.updateNumbers();
+          }
         }
       }
+      MainScreen::ms->pipref->loadConfig(config);
     }
     return 1;
   }

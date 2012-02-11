@@ -14,10 +14,11 @@ LDFLAGS+= -L../pbtk/obj_$(BUILD)
 LIBS+=-lpbtk
 
 ifeq (${BUILD},emu)
-CXXFLAGS+=`pkg-config --cflags sigc++-2.0` -I./../
-LIBS+=-lsigc-2.0
+CXXFLAGS+=-g `pkg-config --cflags sigc++-2.0` -I./../
+LIBS+=-g -lsigc-2.0
 else 
 ifeq (${BUILD},arm)
+CXXFLAGS+=-D_OLD_DEV_
 LIBS+=-L/usr/local/pocketbook/arm-linux/lib -lsigc-2.0
 else
 LIBS+=-L/usr/local/pocketbook_eabi/lib -lsigc-2.0
@@ -26,7 +27,9 @@ endif
 
 SOURCES=\
     src/pi.cxx\
-    src/search.cxx
+    src/search.cxx\
+    src/outline.cxx
+
 
 PIXMAPS=
 

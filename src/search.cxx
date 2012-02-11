@@ -76,7 +76,6 @@ SearchDialog::SearchDialog(const std::string& nm,PBTextDisplay* lb,int from,cons
     bt_back("Backward",this),
     start_pos(from),backward(false)
   {
-    //setCaption(nm);
     addWidget(&lb_find);
     addWidget(&inp_find);
     if(replace){
@@ -87,20 +86,16 @@ SearchDialog::SearchDialog(const std::string& nm,PBTextDisplay* lb,int from,cons
     addWidget(&bt_back);
     addWidget(&bt_find);
     addWidget(&bt_close);
-    //btRepl(this,&SearchDialog::onRepl),
-    //btFind(this,&SearchDialog::onFind),
-    //btClose(this,&SearchDialog::onClose),
     bt_find.onPress.connect(sigc::mem_fun(this,&SearchDialog::onFind));
     bt_close.onPress.connect(sigc::mem_fun(this,&SearchDialog::onClose));
     bt_back.onPress.connect(sigc::mem_fun(this,&SearchDialog::onBackward));
     y(50);
   }
   void SearchDialog::placeWidgets(){
-    //printf("%s\n",__PRETTY_FUNCTION__);
     int SW=ScreenWidth();
     int up=y();
-    setSize(10,up,SW-20,130);
-    up+=10;
+    setSize(10,up,SW-20,130+captionHeight());
+    up+=10+captionHeight();
     lb_find.setSize(20,up,70,30);
     inp_find.setSize(100,up,SW-130,30);
     up+=40;
