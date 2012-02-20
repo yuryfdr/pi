@@ -33,6 +33,7 @@ class SearchDialog : public PBDialog {
   PBButton bt_find;
   PBButton bt_close;
   PBCheckButton bt_back;
+  PBCheckButton bt_sens;
 
   void onFind(PBWidget*);
   void onRepl(PBWidget*);
