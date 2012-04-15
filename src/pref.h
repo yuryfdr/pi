@@ -43,10 +43,15 @@ public:
   }
   PBLabel lb_vo,lb_qs,lb_ia,lb_om;
   PBComboBox kbx_vo,kbx_qs,kbx_ia,kbx_om;
+  PBButton bt_close;
+  void on_close(PBButton*){
+    quit(true);
+  }
   PiPref():PBDialog("Quick Keys")
     ,lb_vo("View Outline",this),lb_qs("Quick Save",this)
     ,lb_ia("Insert After",this),lb_om("Open Menu",this)
-    ,kbx_vo("",this),kbx_qs("",this),kbx_ia("",this),kbx_om("",this){
+    ,kbx_vo("",this),kbx_qs("",this),kbx_ia("",this),kbx_om("",this)
+    ,bt_close("Close",this){
     init_keynames();
     std::vector<std::string> kv;
     for(std::map<int,std::string>::iterator it=keynames.begin();it!=keynames.end();++it){
@@ -57,6 +62,7 @@ public:
     addWidget(&kbx_qs);kbx_qs.editable(false);kbx_qs.setItems(kv);
     addWidget(&kbx_ia);kbx_ia.editable(false);kbx_ia.setItems(kv);
     addWidget(&kbx_om);kbx_om.editable(false);kbx_om.setItems(kv);
+    addWidget(&bt_close);bt_close.onPress.connect(sigc::mem_fun(this,&PiPref::on_close));
   }
   void placeWidgets(){
     setSize((ScreenWidth()-400)/2,100,400,10);
@@ -65,6 +71,7 @@ public:
     lb_qs.setSize(x()+5,yy,190,25);kbx_qs.setSize(x()+w()/2,yy,190,25);yy+=30;
     lb_ia.setSize(x()+5,yy,190,25);kbx_ia.setSize(x()+w()/2,yy,190,25);yy+=30;
     lb_om.setSize(x()+5,yy,190,25);kbx_om.setSize(x()+w()/2,yy,190,25);yy+=30;
+    bt_close.setSize(x()+w()/2,yy,190,25);yy+=30;
     setSize(x(),y(),w(),yy-100+captionHeight());
   }
   virtual void run(pb_dialoghandler* n=NULL){

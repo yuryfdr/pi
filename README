@@ -1,6 +1,10 @@
- Pocketbook edItor v 1.0.0
+ Pocketbook edItor v 1.0.1
  to call menu press long OK or long click
  last versions you can find at http://fedorchenko.net/pi.php
+ 
+ 
+ Install:
+ place pi.app to application folder (or games - depends on reader) on device
  
  Command line options:
  -l n  - go to line n after file open
