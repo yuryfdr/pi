@@ -552,7 +552,7 @@ void MainScreen::HandleMainMenuItem(int index)
       break;
     }
   case ITM_ABOUT:
-    Message(ICON_INFORMATION, "π", "π(pi) - Pocketbook edItor v 1.0.1\n"
+    Message(ICON_INFORMATION, "π", "π(pi) - Pocketbook edItor v 1.0.2\n"
             "Yury P. Fedorchenko © 2011-2012\n"
             "OK or click - edit line\n" "long OK or long click - menu", 50000);
     break;
