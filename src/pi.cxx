@@ -64,8 +64,8 @@ void PBTextDisplay::editItem(bool ins)
   curop.str = istr;
   curop.op = undoop::EDIT;
   curop.pos = getPos(item);
-  buff = new char[istr.size() + 512];
-  buff_size = istr.size() + 512;
+  buff = new char[istr.size() + 1024];
+  buff_size = istr.size() + 1024;
   strcpy(buff, istr.c_str());
   changed = true;
   OpenKeyboard("Edit", buff, buff_size, 0 | KBDOPTS, keyboard_entry);
@@ -423,7 +423,6 @@ void MainScreen::HandleMainMenuItem(int index)
   case ITM_RSNT8:
   case ITM_RSNT9:
     if (rsntFile[index - ITM_RSNT0].text) {
-      //ms->fopen_hndl(0,rsntFile[index-ITM_RSNT0].text);
       if (ms->openFile(rsntFile[index - ITM_RSNT0].text)) {
         ms->addRecent(rsntFile[index - ITM_RSNT0].text);
         ms->text.updateNumbers();
@@ -437,7 +436,6 @@ void MainScreen::HandleMainMenuItem(int index)
       if (str.str().find(".ttf") == std::string::npos)
         str << ".ttf";
       str << "," << ms->text.getFont()->size;
-      //std::cerr<<str.str()<<std::endl;
       OpenFontSelector("Select", str.str().c_str(), 1, fsh);
     }
     break;
@@ -509,6 +507,7 @@ void MainScreen::HandleMainMenuItem(int index)
       ms->text.clear();
       ms->text.undo.clear();
       PBListBoxItem *itm = ms->text.addItem("");
+      ms->fileName.clear();
       ms->text.updateNumbers();
       if (itm) {
         ms->update();
@@ -552,18 +551,15 @@ void MainScreen::HandleMainMenuItem(int index)
       break;
     }
   case ITM_ABOUT:
-    Message(ICON_INFORMATION, "π", "π(pi) - Pocketbook edItor v 1.0.2\n"
+    Message(ICON_INFORMATION, "π", "π(pi) - Pocketbook edItor v 1.1.0\n"
             "Yury P. Fedorchenko © 2011-2012\n"
             "OK or click - edit line\n" "long OK or long click - menu", 50000);
     break;
   case ITM_GOTO:
-    //OpenKeyboard("Go to Line",buff,1024,KBD_NUMERIC | KBDOPTS,goto_hndl);
-    //OpenPageSelector(goto_n_hndl);
     if (!ns) {
       ns = new PBNumericSelector("Go to Line:");
       ns->onSelect.connect(sigc::mem_fun(ms, &MainScreen::goto_ln_hndl));
     }
-    //ns->selected(ms->text.getSelectedIndex()+1);
     ns->reset();
     ns->run();
     break;
@@ -629,8 +625,10 @@ int MainScreen::openFile(const char *nm,bool insert)
     Message(ICON_ERROR, "Error", errstr, 50000);
     return 0;
   }
-  fileName = nm;
-  if(!insert)text.clear();
+  if(!insert){
+    fileName = nm;
+    text.clear();
+  }
   while (!in.fail() && !in.eof()) {
     std::string line;
     std::getline(in, line);

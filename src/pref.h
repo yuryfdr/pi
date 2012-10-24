@@ -21,7 +21,6 @@
 #include <map>
 
 class PiPref : public PBDialog{
-public:
   std::map<std::string,int> keysignals;
   std::map<int,std::string> keynames;
   void init_keynames(){
@@ -44,14 +43,19 @@ public:
   PBLabel lb_vo,lb_qs,lb_ia,lb_om;
   PBComboBox kbx_vo,kbx_qs,kbx_ia,kbx_om;
   PBButton bt_close;
+  PBLabel lb_asv;
+  PBComboBox kbx_autosave;
   void on_close(PBButton*){
     quit(true);
   }
+  void preasave();
+ public:
   PiPref():PBDialog("Quick Keys")
     ,lb_vo("View Outline",this),lb_qs("Quick Save",this)
     ,lb_ia("Insert After",this),lb_om("Open Menu",this)
     ,kbx_vo("",this),kbx_qs("",this),kbx_ia("",this),kbx_om("",this)
-    ,bt_close("Close",this){
+    ,bt_close("Close",this)
+    ,lb_asv("Autosave Int",this),kbx_autosave("",this){
     init_keynames();
     std::vector<std::string> kv;
     for(std::map<int,std::string>::iterator it=keynames.begin();it!=keynames.end();++it){
@@ -63,6 +67,15 @@ public:
     addWidget(&kbx_ia);kbx_ia.editable(false);kbx_ia.setItems(kv);
     addWidget(&kbx_om);kbx_om.editable(false);kbx_om.setItems(kv);
     addWidget(&bt_close);bt_close.onPress.connect(sigc::mem_fun(this,&PiPref::on_close));
+    addWidget(&lb_asv);
+    addWidget(&kbx_autosave);
+    std::vector<std::string> ausi;
+    ausi.push_back("-");
+    ausi.push_back("1 min");
+    ausi.push_back("5 min");
+    ausi.push_back("10 min");
+    ausi.push_back("30 min");
+    kbx_autosave.editable(false);kbx_autosave.setItems(ausi);
   }
   void placeWidgets(){
     setSize((ScreenWidth()-400)/2,100,400,10);
@@ -71,6 +84,7 @@ public:
     lb_qs.setSize(x()+5,yy,190,25);kbx_qs.setSize(x()+w()/2,yy,190,25);yy+=30;
     lb_ia.setSize(x()+5,yy,190,25);kbx_ia.setSize(x()+w()/2,yy,190,25);yy+=30;
     lb_om.setSize(x()+5,yy,190,25);kbx_om.setSize(x()+w()/2,yy,190,25);yy+=30;
+    lb_asv.setSize(x()+5,yy,190,25);kbx_autosave.setSize(x()+w()/2,yy,190,25);yy+=30;
     bt_close.setSize(x()+w()/2,yy,190,25);yy+=30;
     setSize(x(),y(),w(),yy-100+captionHeight());
   }
@@ -81,28 +95,10 @@ public:
     kbx_om.setText(keynames[keysignals["OpenMenu"]]);
     PBDialog::run(NULL);
   }
-  virtual void quit(bool isok){
-    for(std::map<int,std::string>::iterator it=keynames.begin();it!=keynames.end();++it){
-      if(it->second == kbx_vo.getText())keysignals["ViewOutline"] = it->first;
-      if(it->second == kbx_qs.getText())keysignals["QuickSave"] = it->first;
-      if(it->second == kbx_ia.getText())keysignals["InsertAfter"] = it->first;
-      if(it->second == kbx_om.getText())keysignals["OpenMenu"] = it->first;
-    }
-    PBDialog::quit(isok);
-  }
-  void loadConfig(iconfig* cfg){
-    keysignals["ViewOutline"] = ReadInt(cfg,"ViewOutline",0);
-    keysignals["QuickSave"] = ReadInt(cfg,"QuickSave",0);
-    keysignals["InsertAfter"] = ReadInt(cfg,"InsertAfter",0);
-    keysignals["OpenMenu"] = ReadInt(cfg,"OpenMenu",0);
-  }
-  void saveConfig(iconfig*cfg){
-    WriteInt(cfg,"ViewOutline",keysignals["ViewOutline"]);
-    WriteInt(cfg,"QuickSave",keysignals["QuickSave"]);
-    WriteInt(cfg,"InsertAfter",keysignals["InsertAfter"]);
-    WriteInt(cfg,"OpenMenu",keysignals["OpenMenu"]);
-  }
-  // 
+  virtual void quit(bool isok);
+  void loadConfig(iconfig* cfg);
+  void saveConfig(iconfig*cfg);
+  //
   void view_outline(){
     MainScreen::ms->HandleMainMenuItem(ITM_TOCF);
   }
@@ -116,7 +112,7 @@ public:
     MainScreen::ms->openMenu(10,10);
   }
   int handleKeys(int key){
-    if(keysignals["ViewOutline"] ==key){view_outline();return 1;}
+    if(keysignals["ViewOutline"] == key){view_outline();return 1;}
     if(keysignals["QuickSave"] == key){quick_save();return 1;}
     if(keysignals["InsertAfter"] == key){insert_after();return 1;}
     if(keysignals["OpenMenu"] == key){open_menu();return 1;}

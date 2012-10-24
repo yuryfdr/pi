@@ -28,6 +28,7 @@ endif
 SOURCES=\
     src/pi.cxx\
     src/search.cxx\
+    src/pref.cxx\
     src/outline.cxx
 
 
